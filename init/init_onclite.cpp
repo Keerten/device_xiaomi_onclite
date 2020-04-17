@@ -27,37 +27,42 @@
    IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
-#include <sys/_system_properties.h>
+#include <sys/sysinfo.h>
 
-#include <android-base/properties.h>
-#include "property_service.h"
 #include "vendor_init.h"
+#include "property_service.h"
+#include "android/log.h"
+
+char const *heapgrowthlimit;
+char const *heapminfree;
 
 using android::init::property_set;
 
-void property_override(char const prop[], char const value[])
+void check_device()
 {
-    prop_info *pi;
+    struct sysinfo sys;
 
-    pi = (prop_info*) __system_property_find(prop);
-    if (pi)
-        __system_property_update(pi, value, strlen(value));
-    else
-        __system_property_add(prop, strlen(prop), value, strlen(value));
-}
+    sysinfo(&sys);
 
-void property_override_dual(char const system_prop[], char const vendor_prop[],
-    char const value[])
-{
-    property_override(system_prop, value);
-    property_override(vendor_prop, value);
+    if (sys.totalram > 2048ull * 1024 * 1024) {
+        // from - Stock rom
+        heapgrowthlimit = "256m";
+        heapminfree = "4m";
+    } else {
+        // from - phone-xxhdpi-2048-dalvik-heap.mk
+        heapgrowthlimit = "192m";
+        heapminfree = "2m";
+   }
 }
 
 void vendor_load_properties()
 {
-    // fingerprint
-    property_override("ro.build.description", "onc-user 9 PKQ1.181021.001 V10.3.4.0.PFLMIXM release-keys");
-    property_override_dual("ro.build.fingerprint", "ro.vendor.build.fingerprint", "google/bonito/bonito:10/QQ2A.200305.002/6138846:user/release-keys");
+    check_device();
+
+    property_set("dalvik.vm.heapstartsize", "16m");
+    property_set("dalvik.vm.heapgrowthlimit", heapgrowthlimit);
+    property_set("dalvik.vm.heapsize", "512m");
+    property_set("dalvik.vm.heaptargetutilization", "0.75");
+    property_set("dalvik.vm.heapminfree", heapminfree);
+    property_set("dalvik.vm.heapmaxfree", "8m");
 }
